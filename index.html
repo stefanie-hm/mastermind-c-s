@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mastermind Christina & Stefanie</title>
+
+<style>
+body{
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    background:#f5f5f7;
+    text-align:center;
+    margin:0;
+    padding:20px;
+    color:#111;
+}
+
+h1{margin-bottom:5px;}
+.subtitle{color:#666;margin-bottom:25px;}
+
+.screen{display:none;}
+.active{display:block;}
+
+img{
+    width:220px;
+    border-radius:20px;
+    margin-bottom:20px;
+}
+
+button{
+    margin-top:20px;
+    padding:10px 28px;
+    border-radius:20px;
+    border:none;
+    background:black;
+    color:white;
+    font-size:15px;
+}
+
+.board{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:60px; /* verhindert Verschiebung */
+}
+
+.attempt-label{
+    width:95px;
+    text-align:right;
+    margin-right:10px;
+    font-size:14px;
+    color:#666;
+}
+
+.circle{
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    margin:5px;
+    background:#ddd;
+}
+
+.circle.active{
+    box-shadow:0 0 0 3px black inset;
+}
+
+.feedback-grid{
+    display:grid;
+    grid-template-columns:repeat(2,20px);
+    grid-template-rows:repeat(2,20px);
+    gap:4px;
+    margin-left:10px;
+    width:44px; /* fixe Breite verhindert Verschieben */
+    height:44px;
+}
+
+.small{
+    width:20px;
+    height:20px;
+    border-radius:50%;
+}
+
+.section{
+    margin-top:20px;
+}
+
+.emoji{
+    font-size:60px;
+    margin:20px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="startScreen" class="screen active">
+
+<h1>Mastermind</h1>
+<div class="subtitle">Christina & Stefanie</div>
+
+<img src="mastermind.jpeg">
+
+<div>
+<div>Anzahl Farben:</div>
+
+<label><input type="radio" name="colorCount" value="6" checked> 6 Farben</label><br>
+<label><input type="radio" name="colorCount" value="7"> 7 Farben</label><br>
+<label><input type="radio" name="colorCount" value="8"> 8 Farben</label>
+</div>
+
+<div style="margin-top:15px;">
+<label>
+<input type="checkbox" id="duplicates" checked>
+Farben mehrfach erlauben
+</label>
+</div>
+
+<button onclick="startGame()">Start</button>
+
+</div>
+
+
+<!-- GAME SCREEN -->
+<div id="gameScreen" class="screen">
+
+<h1>Mastermind</h1>
+<div class="subtitle">Christina & Stefanie</div>
+
+<div id="board" class="board"></div>
+
+<div class="section">
+<div id="currentRow" class="row"></div>
+</div>
+
+<div class="section">
+<div id="colorPicker" class="row"></div>
+</div>
+
+<button onclick="submitGuess()">Prüfen</button>
+<button onclick="backToStart()">Neustart</button>
+
+</div>
+
+
+<!-- WIN SCREEN -->
+<div id="winScreen" class="screen">
+<div class="emoji">👍</div>
+<h2>great you got it</h2>
+<button onclick="backToStart()">Neustart</button>
+</div>
+
+
+<!-- LOSE SCREEN -->
+<div id="loseScreen" class="screen">
+<div class="emoji">👎</div>
+<p>Leider falsch :(</p>
+<p>Das nächste Mal klappt es.</p>
+<p></p>
+<button onclick="backToStart()">Neustart</button>
+</div>
+
+
+<script>
+
+let colors=[];
+let secret=[];
+let currentGuess=[null,null,null,null];
+let attempts=[];
+let activeIndex=0;
+let maxAttempts=6;
+let allowDuplicates=true;
+
+const baseColors=[
+"#ff3b30",
+"#007aff",
+"#34c759",
+"#ffcc00",
+"#ff9500",
+"#af52de",
+"#8B4513",
+"#ff69b4"
+];
+
+function startGame(){
+    const selected=document.querySelector('input[name="colorCount"]:checked');
+    colors=baseColors.slice(0,parseInt(selected.value));
+    allowDuplicates=document.getElementById("duplicates").checked;
+
+    document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+    document.getElementById("gameScreen").classList.add("active");
+
+    newGame();
+}
+
+function backToStart(){
+    document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+    document.getElementById("startScreen").classList.add("active");
+}
+
+function generateSecret(){
+    if(allowDuplicates){
+        secret=Array.from({length:4},()=>Math.floor(Math.random()*colors.length));
+    }else{
+        let temp=[...Array(colors.length).keys()].sort(()=>0.5-Math.random());
+        secret=temp.slice(0,4);
+    }
+}
+
+function drawBoard(){
+    const board=document.getElementById("board");
+    board.innerHTML="";
+
+    for(let i=maxAttempts-1;i>=0;i--){
+        let row=document.createElement("div");
+        row.className="row";
+
+        let label=document.createElement("div");
+        label.className="attempt-label";
+        label.innerText=(i+1)+". Versuch";
+        row.appendChild(label);
+
+        for(let j=0;j<4;j++){
+            let c=document.createElement("div");
+            c.className="circle";
+            if(attempts[i]) c.style.background=colors[attempts[i].guess[j]];
+            row.appendChild(c);
+        }
+
+        let grid=document.createElement("div");
+        grid.className="feedback-grid";
+
+        if(attempts[i]){
+            let feedback=[];
+            for(let b=0;b<attempts[i].black;b++)feedback.push("black");
+            for(let w=0;w<attempts[i].white;w++)feedback.push("white");
+            while(feedback.length<4)feedback.push(null);
+
+            feedback.forEach(f=>{
+                let dot=document.createElement("div");
+                dot.className="small";
+                if(f==="black")dot.style.background="black";
+                if(f==="white"){
+                    dot.style.background="white";
+                    dot.style.border="1px solid #aaa";
+                }
+                grid.appendChild(dot);
+            });
+        }
+
+        row.appendChild(grid);
+        board.appendChild(row);
+    }
+}
+
+function drawCurrent(){
+    const div=document.getElementById("currentRow");
+    div.innerHTML="";
+
+    currentGuess.forEach((val,index)=>{
+        let c=document.createElement("div");
+        c.className="circle";
+        if(val!==null)c.style.background=colors[val];
+        if(index===activeIndex)c.classList.add("active");
+
+        c.onclick=()=>{
+            if(val!==null){
+                currentGuess[index]=null;
+            }else{
+                activeIndex=index;
+            }
+            drawCurrent();
+        };
+
+        div.appendChild(c);
+    });
+}
+
+function drawColors(){
+    const picker=document.getElementById("colorPicker");
+    picker.innerHTML="";
+
+    colors.forEach((color,index)=>{
+        let c=document.createElement("div");
+        c.className="circle";
+        c.style.background=color;
+        c.onclick=()=>selectColor(index);
+        picker.appendChild(c);
+    });
+}
+
+function selectColor(index){
+    if(!allowDuplicates && currentGuess.includes(index))return;
+    currentGuess[activeIndex]=index;
+    if(activeIndex<3)activeIndex++;
+    drawCurrent();
+}
+
+function submitGuess(){
+    if(currentGuess.includes(null))return;
+    if(attempts.length>=maxAttempts)return;
+
+    let black=0,white=0;
+    let s=[...secret];
+    let g=[...currentGuess];
+
+    for(let i=0;i<4;i++){
+        if(g[i]===s[i]){
+            black++;s[i]=null;g[i]=-1;
+        }
+    }
+
+    for(let i=0;i<4;i++){
+        if(g[i]>=0){
+            let idx=s.indexOf(g[i]);
+            if(idx!==-1){white++;s[idx]=null;}
+        }
+    }
+
+    attempts.push({guess:[...currentGuess],black,white});
+
+    if(black===4){
+        document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+        document.getElementById("winScreen").classList.add("active");
+        return;
+    }
+
+    if(attempts.length===maxAttempts){
+        document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+        document.getElementById("loseScreen").classList.add("active");
+        return;
+    }
+
+    currentGuess=[null,null,null,null];
+    activeIndex=0;
+
+    drawBoard();
+    drawCurrent();
+}
+
+function newGame(){
+    attempts=[];
+    currentGuess=[null,null,null,null];
+    activeIndex=0;
+    generateSecret();
+    drawBoard();
+    drawCurrent();
+    drawColors();
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>
